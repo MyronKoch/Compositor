@@ -17,6 +17,21 @@ struct FontMenuFacesTests {
         #expect(names == names.sorted())
     }
 
+    @Test func searchMatchesEveryWordInAnyCase() {
+        #expect(FontMenuFaces.matches("Rockwell-Bold", "rock bold"))
+        #expect(FontMenuFaces.matches("Rockwell-Bold", "BOLD"))
+        #expect(!FontMenuFaces.matches("Rockwell-Regular", "rock bold"))
+        #expect(FontMenuFaces.matches("Anything", "  "))
+    }
+
+    @Test func searchFindsAFamilyByItsTypedName() {
+        #expect(FontMenuFaces.family(named: "helvetica").contains("Helvetica-Bold"))
+        // Extra words after the family name narrow the list later; they don't stop the family being found.
+        #expect(FontMenuFaces.family(named: "helvetica bold").contains("Helvetica-Bold"))
+        #expect(FontMenuFaces.family(named: "no such family zz").isEmpty)
+        #expect(FontMenuFaces.family(named: "").isEmpty)
+    }
+
     /// Rockwell ships with macOS but is left out of `availableFonts`; text set in it must still offer Bold.
     @Test(.enabled(if: NSFont(name: "Rockwell-Bold", size: 12) != nil))
     func aFamilyMacOSDoesNotListStillOffersItsFaces() {
