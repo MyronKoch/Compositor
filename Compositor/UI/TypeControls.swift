@@ -100,6 +100,28 @@ struct TypeControls: View {
     }
 }
 
+/// The faces the font menu lists.
+enum FontMenuFaces {
+    /// Every face `availableFonts` reports, plus the family of each name in `inUse`. macOS leaves some installed
+    /// families out of that list (Rockwell, Athelas, Seravek and others it bundles), though their faces still draw when
+    /// named; text set in one of them, often from an imported Photoshop file, would otherwise offer none of its siblings.
+    static func names(available: [String] = NSFontManager.shared.availableFonts, inUse: [String]) -> [String] {
+        var names = Set(available)
+        for name in inUse where !name.isEmpty {
+            names.insert(name)
+            names.formUnion(family(of: name))
+        }
+        return names.sorted()
+    }
+
+    /// The faces of `name`'s family, by PostScript name, including families macOS doesn't list.
+    static func family(of name: String) -> [String] {
+        guard let family = NSFont(name: name, size: NSFont.systemFontSize)?.familyName,
+              let members = NSFontManager.shared.availableMembers(ofFontFamily: family) else { return [] }
+        return members.compactMap { $0.first as? String }
+    }
+}
+
 /// Keep the installed-font catalog out of SwiftUI's per-keystroke view updates.
 /// The closed control needs only the current name; populate its menu on demand.
 private struct TypeFontPicker: NSViewRepresentable {
@@ -174,6 +196,8 @@ private struct TypeFontPicker: NSViewRepresentable {
         weak var button: NSPopUpButton?
         var tracking = false
         private var loaded = false
+        /// Faces the text has used while this menu was around: their families stay listed (see `FontMenuFaces`).
+        private var facesInUse: Set<String> = []
         /// A face was chosen in the menu just closing, so its preview stays rather than being put back.
         private var chose = false
 
@@ -209,11 +233,12 @@ private struct TypeFontPicker: NSViewRepresentable {
         }
 
         func menuNeedsUpdate(_ menu: NSMenu) {
-            guard !loaded, let button else { return }
+            guard let button else { return }
             let selected = fontName.wrappedValue
-            var names = NSFontManager.shared.availableFonts
-            if !selected.isEmpty, !names.contains(selected) { names.append(selected) }
-            names.sort()
+            // Built once, but rebuilt when the face in use brings in a family the list doesn't have yet.
+            if loaded, selected.isEmpty || FontMenuFaces.family(of: selected).allSatisfy({ button.item(withTitle: $0) != nil }) { return }
+            if !selected.isEmpty { facesInUse.insert(selected) }
+            let names = FontMenuFaces.names(inUse: Array(facesInUse))
             button.removeAllItems()
             button.addItems(withTitles: names)
             for item in button.itemArray { item.attributedTitle = Self.styledName(item.title) }
